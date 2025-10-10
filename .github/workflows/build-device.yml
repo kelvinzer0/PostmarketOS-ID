@@ -97,18 +97,6 @@ jobs:
     timeout-minutes: 240
     
     steps:
-      - name: Free up disk space
-        run: |
-          echo "=== Before cleanup ==="
-          df -h /
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
-          sudo apt-get clean
-          echo "=== After cleanup ==="
-          df -h /
-
       - name: Install pmbootstrap via apt
         run: |
           sudo apt-get update
