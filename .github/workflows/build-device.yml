@@ -123,10 +123,11 @@ jobs:
       - name: Generate pmbootstrap.cfg
         run: |
           mkdir -p ~/.config
+          WORK_DIR="$HOME/.local/var/pmbootstrap"
           
-          cat > ~/.config/pmbootstrap.cfg << 'EOF'
+          cat > ~/.config/pmbootstrap.cfg << EOF
           [pmbootstrap]
-          aports = $WORK/cache_git/pmaports
+          aports = ${WORK_DIR}/cache_git/pmaports
           boot_size = 256
           build_default_device_arch = False
           build_pkgs_on_install = True
@@ -151,7 +152,7 @@ jobs:
           ui = ${{ env.UI }}
           ui_extras = False
           user = ${{ env.USER }}
-          work = $HOME/.local/var/pmbootstrap
+          work = ${WORK_DIR}
           
           [providers]
           EOF
@@ -188,14 +189,24 @@ jobs:
 
       - name: Initialize work directory
         run: |
-          mkdir -p ~/.local/var/pmbootstrap/cache_git
+          WORK_DIR="$HOME/.local/var/pmbootstrap"
+          
+          echo "=== Creating work directory structure ==="
+          mkdir -p "${WORK_DIR}/cache_git"
+          mkdir -p "${WORK_DIR}/config_apkbuild_pkgver"
+          mkdir -p "${WORK_DIR}/config_repos"
+          mkdir -p "${WORK_DIR}/dl"
+          mkdir -p "${WORK_DIR}/packages"
+          mkdir -p "${WORK_DIR}/tmp"
           
           echo "=== Cloning pmaports repository ==="
           git clone --depth=1 https://gitlab.com/postmarketOS/pmaports.git \
-            ~/.local/var/pmbootstrap/cache_git/pmaports
+            "${WORK_DIR}/cache_git/pmaports"
           
           echo "=== Work directory initialized ==="
-          ls -la ~/.local/var/pmbootstrap/
+          ls -la "${WORK_DIR}/"
+          echo "=== Pmaports cloned ==="
+          ls -la "${WORK_DIR}/cache_git/pmaports/" | head -20
 
       - name: Update pmbootstrap
         run: |
