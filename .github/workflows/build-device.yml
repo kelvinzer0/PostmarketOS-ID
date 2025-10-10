@@ -220,6 +220,7 @@ jobs:
 
       - name: Update pmbootstrap
         run: |
+          sudo rm -rf /home/runner/.local/var/pmbootstrap
           pmbootstrap update
           pmbootstrap status
 
