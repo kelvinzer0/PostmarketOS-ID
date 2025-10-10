@@ -97,20 +97,30 @@ jobs:
     timeout-minutes: 240
     
     steps:
-      - name: Install pmbootstrap via apt
+      - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            pmbootstrap \
+            git \
+            python3 \
+            python3-pip \
+            openssl \
             qemu-user-static \
-            binfmt-support
-          
-          # Enable binfmt
+            binfmt-support \
+            sudo
           sudo update-binfmts --enable || true
-          
-          # Verify installation
+
+      - name: Install pmbootstrap from git
+        run: |
+          git clone --depth=1 https://gitlab.com/postmarketOS/pmbootstrap.git
+          cd pmbootstrap
+          pip3 install --user .
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Verify pmbootstrap installation
+        run: |
           pmbootstrap --version
-          echo "Pmbootstrap installed successfully"
+          pmbootstrap -h
 
       - name: Setup SSH keys for device
         if: github.event.inputs.ssh_keys == 'true'
