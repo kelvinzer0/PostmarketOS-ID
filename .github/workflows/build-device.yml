@@ -172,7 +172,6 @@ jobs:
 
       - name: Generate pmbootstrap_v3.cfg
         run: |
-          # Determine wifi provider based on backend
           WIFI_PROVIDER="postmarketos-base-ui-wifi-wpa_supplicant"
           if [ "${{ env.WIFI_BACKEND }}" = "iwd" ]; then
             WIFI_PROVIDER="postmarketos-base-ui-wifi-iwd"
@@ -221,6 +220,15 @@ jobs:
       - name: Update pmbootstrap
         run: |
           sudo rm -rf /home/runner/.local/var/pmbootstrap
+          sudo mkdir -p /home/runner/.local/var/pmbootstrap/cache_git
+          PMAPORTS_DIR="/home/runner/.local/var/pmbootstrap/cache_git/pmaports"
+          if [ -d "$PMAPORTS_DIR/.git" ]; then
+            echo "Directory exists. Pulling latest changes..."
+            git -C "$PMAPORTS_DIR" pull
+          else
+            echo "Directory does not exist. Cloning..."
+            git clone https://gitlab.postmarketos.org/postmarketOS/pmaports.git "$PMAPORTS_DIR"
+          fi
           pmbootstrap update
           pmbootstrap status
 
