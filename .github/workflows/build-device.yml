@@ -249,16 +249,16 @@ jobs:
           
           case "$INSTALL_METHOD" in
             android-recovery-zip)
-              pmbootstrap install --android-recovery-zip
+              printf "147147\n147147\n" | pmbootstrap install --android-recovery-zip
               ;;
             netboot)
-              pmbootstrap install --no-fde --no-image
+              printf "147147\n147147\n" | pmbootstrap install --no-fde --no-image
               ;;
             rootfs)
-              pmbootstrap install --no-fde
+              printf "147147\n147147\n" | pmbootstrap install --no-fde
               ;;
             *)
-              pmbootstrap install --android-recovery-zip
+              printf "147147\n147147\n" | pmbootstrap install --android-recovery-zip
               ;;
           esac
 
