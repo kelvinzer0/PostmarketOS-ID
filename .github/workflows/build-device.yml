@@ -225,17 +225,9 @@ jobs:
           echo "Cleaning old workdir..."
           rm -rf "$WORK_DIR"
           mkdir -p "$WORK_DIR/cache_git"
-      
-          echo "Cloning or updating pmaports..."
-          if [ -d "$PMAPORTS_DIR/.git" ]; then
-            echo "Directory exists. Pulling latest changes..."
-            git -C "$PMAPORTS_DIR" pull
-          else
-            echo "Directory does not exist. Cloning..."
-            git clone https://gitlab.postmarketos.org/postmarketOS/pmaports.git "$PMAPORTS_DIR"
-          fi
-      
-          pmbootstrap update
+          printf "\n\n" | pmbootstrap init || true
+        
+          pmbootstrap update --non-existing
           pmbootstrap status
 
 
