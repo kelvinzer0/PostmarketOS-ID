@@ -3,7 +3,6 @@ name: Build postmarketOS Device
 on:
   push:
     branches:
-      - main
       - develop
   pull_request:
     branches:
@@ -269,7 +268,7 @@ jobs:
           
           case "$INSTALL_METHOD" in
             android-recovery-zip)
-              printf "147147\n147147\n" | pmbootstrap install --android-recovery-zip
+              printf "147147\n147147\n" | pmbootstrap install --android-recovery-zip --recovery-install-partition=data
               ;;
             netboot)
               printf "147147\n147147\n" | pmbootstrap install --no-fde --no-image
@@ -278,7 +277,7 @@ jobs:
               printf "147147\n147147\n" | pmbootstrap install --no-fde
               ;;
             *)
-              printf "147147\n147147\n" | pmbootstrap install --android-recovery-zip
+              printf "147147\n147147\n" | pmbootstrap install --android-recovery-zip --recovery-install-partition=data
               ;;
           esac
 
