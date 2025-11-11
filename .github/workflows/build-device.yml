@@ -302,18 +302,49 @@ jobs:
           
           mkdir -p "$ARTIFACT_DIR"
           
-          # Copy exported files
+          echo "=== Copying all exported artifacts ==="
+
+          # Copy from /tmp/postmarketOS-export (main export location)
+          if [ -d "/tmp/postmarketOS-export" ]; then
+            echo "Copying from /tmp/postmarketOS-export"
+            cp -rv /tmp/postmarketOS-export/* "$ARTIFACT_DIR/" 2>/dev/null || true
+          fi
+          
+          # Copy from pmbootstrap work export directory
           if [ -d "$WORK_DIR/export" ]; then
+            echo "Copying from $WORK_DIR/export"
             cp -rv "$WORK_DIR/export"/* "$ARTIFACT_DIR/" 2>/dev/null || true
           fi
           
-          # Find and copy recovery zips
-          find "$WORK_DIR" -name "*.zip" -type f -exec cp {} "$ARTIFACT_DIR/" \; 2>/dev/null || true
+          # Copy from chroot export if exists
+          if [ -d "$WORK_DIR/chroot_native/tmp/postmarketOS-export" ]; then
+            echo "Copying from chroot export"
+            cp -rv "$WORK_DIR/chroot_native/tmp/postmarketOS-export"/* "$ARTIFACT_DIR/" 2>/dev/null || true
+          fi
+
+          # Find and copy all the files mentioned in the export list
+          echo "Searching for additional files in $WORK_DIR"
           
-          # Find and copy image files
-          find "$WORK_DIR" -name "*.img" -type f -exec cp {} "$ARTIFACT_DIR/" \; 2>/dev/null || true
-          find "$WORK_DIR" -name "*.img.xz" -type f -exec cp {} "$ARTIFACT_DIR/" \; 2>/dev/null || true
+          # Odin files
+          find "$WORK_DIR" -name "*.tar.md5" -type f -exec cp -v {} "$ARTIFACT_DIR/" \; 2>/dev/null || true
           
+          # Recovery zips
+          find "$WORK_DIR" -name "pmos-*.zip" -type f -exec cp -v {} "$ARTIFACT_DIR/" \; 2>/dev/null || true
+          find "$WORK_DIR" -name "*.zip" -type f -exec cp -v {} "$ARTIFACT_DIR/" \; 2>/dev/null || true
+          
+          # All image files
+          find "$WORK_DIR" -name "*.img" -type f -exec cp -v {} "$ARTIFACT_DIR/" \; 2>/dev/null || true
+          find "$WORK_DIR" -name "*.img.xz" -type f -exec cp -v {} "$ARTIFACT_DIR/" \; 2>/dev/null || true
+          
+          # U-boot images
+          find "$WORK_DIR" -name "uInitrd" -type f -exec cp -v {} "$ARTIFACT_DIR/" \; 2>/dev/null || true
+          find "$WORK_DIR" -name "uImage" -type f -exec cp -v {} "$ARTIFACT_DIR/" \; 2>/dev/null || true
+          
+          # Kernel and initramfs
+          find "$WORK_DIR" -name "initramfs" -type f -exec cp -v {} "$ARTIFACT_DIR/" \; 2>/dev/null || true
+          find "$WORK_DIR" -name "vmlinuz" -type f -exec cp -v {} "$ARTIFACT_DIR/" \; 2>/dev/null || true
+          find "$WORK_DIR" -name "initramfs-*" -type f -exec cp -v {} "$ARTIFACT_DIR/" \; 2>/dev/null || true
+
           # Copy SSH key info to artifact
           if [ -f ~/.ssh/id_rsa.pub ]; then
             cp ~/.ssh/id_rsa.pub "$ARTIFACT_DIR/SSH_PUBLIC_KEY.txt"
