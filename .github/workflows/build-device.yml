@@ -276,6 +276,9 @@ jobs:
             rootfs)
               printf "147147\n147147\n" | pmbootstrap install --no-fde
               ;;
+            odin)
+              printf "147147\n147147\n" | pmbootstrap install
+              ;;
             *)
               printf "147147\n147147\n" | pmbootstrap install --android-recovery-zip --recovery-install-partition=data
               ;;
@@ -284,7 +287,7 @@ jobs:
       - name: Export artifacts
         run: |
           echo "=== Exporting build artifacts ==="
-          pmbootstrap export
+          pmbootstrap export --odin
           
           EXPORT_DIR="$HOME/.local/var/pmbootstrap/export"
           if [ -d "$EXPORT_DIR" ]; then
@@ -443,12 +446,7 @@ jobs:
           Check the "Artifacts" section at the top of this page to download your build.
           
           ## 🚀 Quick Install Guide
-          1. Download the `.zip` file from artifacts
-          2. Copy to your device's SD card
-          3. Boot into TWRP recovery
-          4. Wipe → Factory Reset
-          5. Install → Select the `.zip` file
-          6. Reboot System
+           Coming soon
           
           ## 📚 Useful Links
           - [Device Wiki Page](https://wiki.postmarketos.org/wiki/Device:${{ env.DEVICE }})
