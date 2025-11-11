@@ -85,6 +85,7 @@ on:
           - android-recovery-zip
           - netboot
           - rootfs
+          - odin
 
 env:
   DEVICE: ${{ github.event.inputs.device || 'samsung-j4lte' }}
@@ -276,6 +277,9 @@ jobs:
             rootfs)
               printf "147147\n147147\n" | pmbootstrap install --no-fde
               ;;
+            odin)
+              printf "147147\n147147\n" | pmbootstrap install
+              ;;
             *)
               printf "147147\n147147\n" | pmbootstrap install --android-recovery-zip --recovery-install-partition=data
               ;;
@@ -284,7 +288,7 @@ jobs:
       - name: Export artifacts
         run: |
           echo "=== Exporting build artifacts ==="
-          pmbootstrap export
+          pmbootstrap export --odin
           
           EXPORT_DIR="$HOME/.local/var/pmbootstrap/export"
           if [ -d "$EXPORT_DIR" ]; then
