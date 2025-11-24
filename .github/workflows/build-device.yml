@@ -251,7 +251,7 @@ jobs:
           
           printf "\n\n" | pmbootstrap init || true
         
-          pmbootstrap pull || true
+          pmbootstrap update --non-existing || true
           pmbootstrap status || true
 
       - name: Build device packages
