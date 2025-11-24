@@ -10,14 +10,14 @@ on:
   workflow_dispatch:
     inputs:
       device:
-        description: 'Device codename (e.g., samsung-j4lte, qemu-amd64)'
+        description: 'Device codename (e.g., samsung-goyave3g, samsung-j4lte)'
         required: true
-        default: 'samsung-j4lte'
+        default: 'samsung-goyave3g'
         type: string
       ui:
         description: 'User interface'
         required: true
-        default: 'xfce4'
+        default: 'i3wm'
         type: choice
         options:
           - none
@@ -61,7 +61,7 @@ on:
       ssh_keys:
         description: 'Enable SSH keys (will use custom key below)'
         required: true
-        default: true
+        default: false
         type: boolean
       custom_ssh_key:
         description: 'Custom SSH public key (paste your id_rsa.pub content here)'
@@ -86,15 +86,27 @@ on:
           - netboot
           - rootfs
           - odin
+      pmaports_repo:
+        description: 'Custom pmaports repository URL'
+        required: false
+        default: 'https://codeberg.org/JoseskVolpe/pmaports.git'
+        type: string
+      pmaports_branch:
+        description: 'Pmaports branch'
+        required: false
+        default: 'v23.12'
+        type: string
 
 env:
-  DEVICE: ${{ github.event.inputs.device || 'samsung-j4lte' }}
-  UI: ${{ github.event.inputs.ui || 'xfce4' }}
+  DEVICE: ${{ github.event.inputs.device || 'samsung-goyave3g' }}
+  UI: ${{ github.event.inputs.ui || 'i3wm' }}
   USER: ${{ github.event.inputs.user || 'pmos' }}
-  EXTRA_PACKAGES: ${{ github.event.inputs.extra_packages || 'nano,vim,wget' }}
+  EXTRA_PACKAGES: ${{ github.event.inputs.extra_packages || 'nano,vim,wget,htop' }}
   KERNEL: ${{ github.event.inputs.kernel || 'stable' }}
   SYSTEMD: ${{ github.event.inputs.systemd || 'default' }}
   WIFI_BACKEND: ${{ github.event.inputs.wifi_backend || 'wpa_supplicant' }}
+  PMAPORTS_REPO: ${{ github.event.inputs.pmaports_repo || 'https://codeberg.org/JoseskVolpe/pmaports.git' }}
+  PMAPORTS_BRANCH: ${{ github.event.inputs.pmaports_branch || 'v23.12' }}
 
 jobs:
   build:
@@ -151,6 +163,50 @@ jobs:
           echo "=== SSH public key content ==="
           cat ~/.ssh/id_rsa.pub
 
+      - name: Initialize work directory with custom pmaports
+        run: |
+          WORK_DIR="$HOME/.local/var/pmbootstrap"
+          
+          echo "=== Creating work directory structure ==="
+          mkdir -p "${WORK_DIR}/cache_git"
+          mkdir -p "${WORK_DIR}/config_apkbuild_pkgver"
+          mkdir -p "${WORK_DIR}/config_repos"
+          mkdir -p "${WORK_DIR}/dl"
+          mkdir -p "${WORK_DIR}/packages"
+          mkdir -p "${WORK_DIR}/tmp"
+          
+          echo "=== Cloning CUSTOM pmaports repository ==="
+          echo "Repository: ${{ env.PMAPORTS_REPO }}"
+          echo "Branch: ${{ env.PMAPORTS_BRANCH }}"
+          
+          git clone --depth=1 --branch "${{ env.PMAPORTS_BRANCH }}" \
+            "${{ env.PMAPORTS_REPO }}" \
+            "${WORK_DIR}/cache_git/pmaports"
+          
+          echo "=== Work directory initialized ==="
+          ls -la "${WORK_DIR}/"
+          echo "=== Pmaports cloned ==="
+          ls -la "${WORK_DIR}/cache_git/pmaports/" | head -20
+          
+          echo "=== Verifying device package exists ==="
+          if [ -d "${WORK_DIR}/cache_git/pmaports/device/testing/device-${{ env.DEVICE }}" ]; then
+            echo "✅ Device package found: device-${{ env.DEVICE }}"
+            ls -la "${WORK_DIR}/cache_git/pmaports/device/testing/device-${{ env.DEVICE }}/"
+          else
+            echo "❌ ERROR: Device package not found!"
+            echo "Available Samsung devices:"
+            find "${WORK_DIR}/cache_git/pmaports/device" -type d -name "device-samsung-*"
+            exit 1
+          fi
+          
+          echo "=== Verifying kernel package exists ==="
+          if [ -d "${WORK_DIR}/cache_git/pmaports/device/testing/linux-${{ env.DEVICE }}" ]; then
+            echo "✅ Kernel package found: linux-${{ env.DEVICE }}"
+            ls -la "${WORK_DIR}/cache_git/pmaports/device/testing/linux-${{ env.DEVICE }}/"
+          else
+            echo "⚠️ WARNING: Kernel package not found (may use different name)"
+          fi
+
       - name: Generate pmbootstrap.cfg
         run: |
           mkdir -p ~/.config
@@ -167,7 +223,7 @@ jobs:
           extra_packages = ${{ env.EXTRA_PACKAGES }}
           extra_space = 0
           hostname = ${{ env.DEVICE }}
-          is_default_channel = True
+          is_default_channel = False
           jobs = 4
           kernel = ${{ env.KERNEL }}
           keymap = 
@@ -202,7 +258,7 @@ jobs:
           [pmbootstrap]
           device = ${{ env.DEVICE }}
           extra_packages = ${{ env.EXTRA_PACKAGES }}
-          is_default_channel = True
+          is_default_channel = False
           ssh_keys = ${{ github.event.inputs.ssh_keys || 'False' }}
           systemd = ${{ env.SYSTEMD }}
           ui = ${{ env.UI }}
@@ -217,49 +273,31 @@ jobs:
           echo "=== pmbootstrap_v3.cfg created ==="
           cat ~/.config/pmbootstrap_v3.cfg
 
-      - name: Initialize work directory
-        run: |
-          WORK_DIR="$HOME/.local/var/pmbootstrap"
-          
-          echo "=== Creating work directory structure ==="
-          mkdir -p "${WORK_DIR}/cache_git"
-          mkdir -p "${WORK_DIR}/config_apkbuild_pkgver"
-          mkdir -p "${WORK_DIR}/config_repos"
-          mkdir -p "${WORK_DIR}/dl"
-          mkdir -p "${WORK_DIR}/packages"
-          mkdir -p "${WORK_DIR}/tmp"
-          
-          echo "=== Cloning pmaports repository ==="
-          git clone --depth=1 https://gitlab.com/postmarketOS/pmaports.git \
-            "${WORK_DIR}/cache_git/pmaports"
-          
-          echo "=== Work directory initialized ==="
-          ls -la "${WORK_DIR}/"
-          echo "=== Pmaports cloned ==="
-          ls -la "${WORK_DIR}/cache_git/pmaports/" | head -20
-
       - name: Update pmbootstrap
         run: |
-          WORK_DIR="$HOME/.local/var/pmbootstrap"
-          PMAPORTS_DIR="$WORK_DIR/cache_git/pmaports"
-          
-          echo "Cleaning old workdir..."
-          rm -rf "$WORK_DIR"
-          mkdir -p "$WORK_DIR/cache_git"
-          printf "\n\n" | pmbootstrap init || true
-        
+          echo "=== Updating pmbootstrap package indexes ==="
           pmbootstrap update --non-existing
+          
+          echo "=== Checking pmbootstrap status ==="
           pmbootstrap status
 
       - name: Build device packages
         run: |
           echo "=== Building device packages for ${{ env.DEVICE }} ==="
           
-          # Try to build device-specific packages
-          pmbootstrap build device-${{ env.DEVICE }} || echo "device package build skipped"
+          # Build device-specific packages
+          echo "Building device package..."
+          pmbootstrap build device-${{ env.DEVICE }} || {
+            echo "⚠️ Device package build failed or skipped"
+            pmbootstrap log
+          }
           
-          # Try to build kernel
-          pmbootstrap build linux-${{ env.DEVICE }} || echo "kernel build skipped"
+          # Build kernel
+          echo "Building kernel package..."
+          pmbootstrap build linux-${{ env.DEVICE }} || {
+            echo "⚠️ Kernel package build failed or skipped"
+            pmbootstrap log
+          }
 
       - name: Install postmarketOS
         run: |
@@ -288,7 +326,7 @@ jobs:
       - name: Export artifacts
         run: |
           echo "=== Exporting build artifacts ==="
-          pmbootstrap export --odin
+          pmbootstrap export --odin || pmbootstrap export || true
           
           EXPORT_DIR="$HOME/.local/var/pmbootstrap/export"
           if [ -d "$EXPORT_DIR" ]; then
@@ -365,6 +403,10 @@ jobs:
           - **Extra Packages**: `${{ env.EXTRA_PACKAGES }}`
           - **SSH Keys**: `${{ github.event.inputs.ssh_keys || 'false' }}`
           
+          ## Custom Pmaports
+          - **Repository**: `${{ env.PMAPORTS_REPO }}`
+          - **Branch**: `${{ env.PMAPORTS_BRANCH }}`
+          
           ## SSH Configuration
           - SSH keys have been configured for the device
           - Check `SSH_PUBLIC_KEY.txt` in artifacts to see the public key used
@@ -409,7 +451,6 @@ jobs:
           ## Resources
           - [PostmarketOS Wiki](https://wiki.postmarketos.org/)
           - [Installation Guide](https://wiki.postmarketos.org/wiki/Installation_guide)
-          - [Device Info: ${{ env.DEVICE }}](https://wiki.postmarketos.org/wiki/Device:${{ env.DEVICE }})
           - [Troubleshooting](https://wiki.postmarketos.org/wiki/Troubleshooting)
           
           ## Checksum
@@ -461,6 +502,8 @@ jobs:
           | **Extra Packages** | `${{ env.EXTRA_PACKAGES }}` |
           | **Install Method** | `${{ github.event.inputs.install_method || 'android-recovery-zip' }}` |
           | **SSH Keys** | `${{ github.event.inputs.ssh_keys }}` |
+          | **Pmaports Repo** | `${{ env.PMAPORTS_REPO }}` |
+          | **Pmaports Branch** | `${{ env.PMAPORTS_BRANCH }}` |
           
           ## 📊 Build Information
           - **Status**: ${{ job.status }}
@@ -486,9 +529,9 @@ jobs:
           6. Reboot System
           
           ## 📚 Useful Links
-          - [Device Wiki Page](https://wiki.postmarketos.org/wiki/Device:${{ env.DEVICE }})
           - [PostmarketOS Installation Guide](https://wiki.postmarketos.org/wiki/Installation_guide)
           - [Troubleshooting Guide](https://wiki.postmarketos.org/wiki/Troubleshooting)
+          - [Custom Pmaports Repository](${{ env.PMAPORTS_REPO }})
           
           ---
           *Build completed at $(date)*
