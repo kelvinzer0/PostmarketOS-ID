@@ -245,8 +245,8 @@ jobs:
           
           printf "\n\n" | pmbootstrap init || true
         
-          pmbootstrap pull
-          pmbootstrap status
+          pmbootstrap pull || true
+          pmbootstrap status || true
 
       - name: Build device packages
         run: |
