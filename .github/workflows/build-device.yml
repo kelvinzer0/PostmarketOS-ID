@@ -86,16 +86,6 @@ on:
           - netboot
           - rootfs
           - odin
-      pmaports_repo:
-        description: 'Custom pmaports repository URL'
-        required: false
-        default: 'https://codeberg.org/JoseskVolpe/pmaports.git'
-        type: string
-      pmaports_branch:
-        description: 'Pmaports branch'
-        required: false
-        default: 'v23.12'
-        type: string
 
 env:
   DEVICE: ${{ github.event.inputs.device || 'samsung-goyave3g' }}
@@ -105,8 +95,9 @@ env:
   KERNEL: ${{ github.event.inputs.kernel || 'stable' }}
   SYSTEMD: ${{ github.event.inputs.systemd || 'default' }}
   WIFI_BACKEND: ${{ github.event.inputs.wifi_backend || 'wpa_supplicant' }}
-  PMAPORTS_REPO: ${{ github.event.inputs.pmaports_repo || 'https://codeberg.org/JoseskVolpe/pmaports.git' }}
-  PMAPORTS_BRANCH: ${{ github.event.inputs.pmaports_branch || 'v23.12' }}
+  # Hardcoded custom pmaports repository (edit these values as needed)
+  PMAPORTS_REPO: 'https://codeberg.org/JoseskVolpe/pmaports.git'
+  PMAPORTS_BRANCH: 'v23.12'
 
 jobs:
   build:
