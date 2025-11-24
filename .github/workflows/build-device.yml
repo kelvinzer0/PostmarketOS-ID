@@ -229,23 +229,6 @@ jobs:
           echo "=== Config created ==="
           cat ~/.config/pmbootstrap_v3.cfg
 
-      - name: Initialize pmbootstrap
-        run: |
-          echo "=== Initializing pmbootstrap ==="
-          # Use v23.12 channel with edge binaries (configured in channels.cfg)
-          printf "v23.12\n\n\n\n\n\n\n\n\ny\n\n" | pmbootstrap init || true
-          
-          echo "=== Checking status ==="
-          pmbootstrap status
-
-      - name: Update package indexes
-        run: |
-          echo "=== Updating package indexes ==="
-          pmbootstrap update --non-existing || {
-            echo "⚠️ WARNING: Some package indexes failed to download"
-            echo "This is expected for v23.12 branch - will build from source"
-          }
-
       - name: Build device packages
         continue-on-error: true
         run: |
