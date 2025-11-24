@@ -10,14 +10,14 @@ on:
   workflow_dispatch:
     inputs:
       device:
-        description: 'Device codename'
+        description: 'Device codename (e.g., samsung-j4lte, qemu-amd64)'
         required: true
-        default: 'samsung-goyave3g'
+        default: 'samsung-j4lte'
         type: string
       ui:
         description: 'User interface'
         required: true
-        default: 'i3wm'
+        default: 'xfce4'
         type: choice
         options:
           - none
@@ -49,13 +49,22 @@ on:
           - stable
           - mainline
           - lts
-      ssh_keys:
-        description: 'Enable SSH keys'
+      systemd:
+        description: 'Init system'
         required: true
-        default: false
+        default: 'default'
+        type: choice
+        options:
+          - default
+          - always
+          - never
+      ssh_keys:
+        description: 'Enable SSH keys (will use custom key below)'
+        required: true
+        default: true
         type: boolean
       custom_ssh_key:
-        description: 'Custom SSH public key'
+        description: 'Custom SSH public key (paste your id_rsa.pub content here)'
         required: false
         default: ''
         type: string
@@ -76,17 +85,16 @@ on:
           - android-recovery-zip
           - netboot
           - rootfs
+          - odin
 
 env:
-  DEVICE: ${{ github.event.inputs.device || 'samsung-goyave3g' }}
-  UI: ${{ github.event.inputs.ui || 'i3wm' }}
+  DEVICE: ${{ github.event.inputs.device || 'samsung-j4lte' }}
+  UI: ${{ github.event.inputs.ui || 'xfce4' }}
   USER: ${{ github.event.inputs.user || 'pmos' }}
-  EXTRA_PACKAGES: ${{ github.event.inputs.extra_packages || 'nano,vim,wget,htop' }}
+  EXTRA_PACKAGES: ${{ github.event.inputs.extra_packages || 'nano,vim,wget' }}
   KERNEL: ${{ github.event.inputs.kernel || 'stable' }}
+  SYSTEMD: ${{ github.event.inputs.systemd || 'default' }}
   WIFI_BACKEND: ${{ github.event.inputs.wifi_backend || 'wpa_supplicant' }}
-  # Custom pmaports configuration
-  CUSTOM_PMAPORTS_REPO: 'https://codeberg.org/JoseskVolpe/pmaports.git'
-  CUSTOM_PMAPORTS_BRANCH: 'v23.12'
 
 jobs:
   build:
@@ -94,14 +102,6 @@ jobs:
     timeout-minutes: 240
     
     steps:
-      - name: Maximize build space
-        run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/ghc
-          sudo rm -rf "/usr/local/share/boost"
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-          df -h
-
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -111,98 +111,88 @@ jobs:
             python3-pip \
             openssl \
             qemu-user-static \
-            binfmt-support
+            binfmt-support \
+            sudo
           sudo update-binfmts --enable || true
 
-      - name: Install pmbootstrap
+      - name: Install pmbootstrap from git
         run: |
           git clone --depth=1 https://gitlab.postmarketos.org/postmarketOS/pmbootstrap
           cd pmbootstrap
           pip3 install --user .
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-      - name: Verify pmbootstrap
+      - name: Verify pmbootstrap installation
         run: |
           pmbootstrap --version
+          pmbootstrap -h
 
-      - name: Setup SSH keys
+      - name: Setup custom SSH keys for device
         if: github.event.inputs.ssh_keys == 'true'
         run: |
           mkdir -p ~/.ssh
           
+          # Check if custom SSH key is provided
           if [ -n "${{ github.event.inputs.custom_ssh_key }}" ]; then
+            echo "=== Using custom SSH public key ==="
             echo "${{ github.event.inputs.custom_ssh_key }}" > ~/.ssh/id_rsa.pub
+            echo "Custom SSH key configured"
           else
+            echo "=== Using GitHub SSH keys as fallback ==="
             curl -sL "https://github.com/${{ github.actor }}.keys" > ~/.ssh/id_rsa.pub || true
+            
+            # If GitHub keys are empty, create a warning
             if [ ! -s ~/.ssh/id_rsa.pub ]; then
-              echo "# No SSH keys" > ~/.ssh/id_rsa.pub
+              echo "WARNING: No SSH keys found. Device will not have SSH key authentication!"
+              echo "# No SSH keys configured" > ~/.ssh/id_rsa.pub
             fi
           fi
           
+          echo "=== SSH public key content ==="
           cat ~/.ssh/id_rsa.pub
 
-      - name: Setup pmaports (using custom repository directly)
-        run: |
-          WORK_DIR="$HOME/.local/var/pmbootstrap"
-          mkdir -p "${WORK_DIR}/cache_git"
-          PMAPORTS="${WORK_DIR}/cache_git/pmaports"
-          
-          echo "=== Cloning custom pmaports repository ==="
-          echo "Repository: ${{ env.CUSTOM_PMAPORTS_REPO }}"
-          echo "Branch: ${{ env.CUSTOM_PMAPORTS_BRANCH }}"
-          
-          git clone --depth=1 --branch "${{ env.CUSTOM_PMAPORTS_BRANCH }}" \
-            "${{ env.CUSTOM_PMAPORTS_REPO }}" \
-            "${PMAPORTS}"
-          
-          cd "${PMAPORTS}"
-          
-          echo "=== Setting up git remotes for pmbootstrap compatibility ==="
-          git remote rename origin custom
-          git remote add origin https://gitlab.postmarketos.org/postmarketOS/pmaports.git
-          git fetch origin master:refs/remotes/origin/master --depth=1
-          git checkout ${{ env.CUSTOM_PMAPORTS_BRANCH }}
-          
-          echo "=== Configuring to use edge binary packages ==="
-          # Modify channels.cfg to point v23.12 to use edge binaries
-          if [ -f "channels.cfg" ]; then
-            # Update v23.12 channel to use edge mirror for binaries
-            sed -i 's|mirrordir_alpine = .*|mirrordir_alpine = edge|' channels.cfg
-            sed -i 's|branch_aports = .*|branch_aports = edge|' channels.cfg
-            echo "Modified channels.cfg:"
-            cat channels.cfg | grep -A5 "\[v23.12\]" || true
-          fi
-          
-          echo "=== Git remotes configured ==="
-          git remote -v
-          git branch -a
-          
-          echo "=== Verifying device packages exist ==="
-          if [ -d "${PMAPORTS}/device/testing/device-${{ env.DEVICE }}" ]; then
-            echo "✅ Device package found: device-${{ env.DEVICE }}"
-            ls -la "${PMAPORTS}/device/testing/device-${{ env.DEVICE }}/"
-          else
-            echo "❌ Device package not found!"
-            exit 1
-          fi
-          
-          if [ -d "${PMAPORTS}/device/testing/linux-${{ env.DEVICE }}" ]; then
-            echo "✅ Kernel package found: linux-${{ env.DEVICE }}"
-            ls -la "${PMAPORTS}/device/testing/linux-${{ env.DEVICE }}/"
-          else
-            echo "❌ Kernel package not found!"
-            exit 1
-          fi
-          
-          echo "=== Checking for additional packages ==="
-          ls -la "${PMAPORTS}/device/testing/" | grep "${{ env.DEVICE }}" || true
-
-      - name: Create pmbootstrap config
+      - name: Generate pmbootstrap.cfg
         run: |
           mkdir -p ~/.config
           WORK_DIR="$HOME/.local/var/pmbootstrap"
           
-          # pmbootstrap v3 config
+          cat > ~/.config/pmbootstrap.cfg << EOF
+          [pmbootstrap]
+          aports = ${WORK_DIR}/cache_git/pmaports
+          boot_size = 256
+          build_default_device_arch = False
+          build_pkgs_on_install = True
+          ccache_size = 5G
+          device = ${{ env.DEVICE }}
+          extra_packages = ${{ env.EXTRA_PACKAGES }}
+          extra_space = 0
+          hostname = ${{ env.DEVICE }}
+          is_default_channel = True
+          jobs = 4
+          kernel = ${{ env.KERNEL }}
+          keymap = 
+          locale = en_US.UTF-8
+          mirror_alpine = http://dl-cdn.alpinelinux.org/alpine/
+          mirrors_postmarketos = http://mirror.postmarketos.org/postmarketos/
+          qemu_redir_stdio = False
+          ssh_key_glob = ~/.ssh/id_*.pub
+          ssh_keys = ${{ github.event.inputs.ssh_keys || 'False' }}
+          sudo_timer = False
+          systemd = ${{ env.SYSTEMD }}
+          timezone = UTC
+          ui = ${{ env.UI }}
+          ui_extras = False
+          user = ${{ env.USER }}
+          work = ${WORK_DIR}
+          
+          [providers]
+          EOF
+          
+          echo "=== pmbootstrap.cfg created ==="
+          cat ~/.config/pmbootstrap.cfg
+
+      - name: Generate pmbootstrap_v3.cfg
+        run: |
           WIFI_PROVIDER="postmarketos-base-ui-wifi-wpa_supplicant"
           if [ "${{ env.WIFI_BACKEND }}" = "iwd" ]; then
             WIFI_PROVIDER="postmarketos-base-ui-wifi-iwd"
@@ -210,15 +200,13 @@ jobs:
           
           cat > ~/.config/pmbootstrap_v3.cfg << EOF
           [pmbootstrap]
-          aports = ${WORK_DIR}/cache_git/pmaports
-          channel = v23.12
           device = ${{ env.DEVICE }}
           extra_packages = ${{ env.EXTRA_PACKAGES }}
-          is_default_channel = False
-          ssh_keys = ${{ github.event.inputs.ssh_keys || 'false' }}
+          is_default_channel = True
+          ssh_keys = ${{ github.event.inputs.ssh_keys || 'False' }}
+          systemd = ${{ env.SYSTEMD }}
           ui = ${{ env.UI }}
           user = ${{ env.USER }}
-          work = ${WORK_DIR}
           
           [providers]
           postmarketos-base-ui-wifi = ${WIFI_PROVIDER}
@@ -226,47 +214,59 @@ jobs:
           [mirrors]
           EOF
           
-          echo "=== Config created ==="
+          echo "=== pmbootstrap_v3.cfg created ==="
           cat ~/.config/pmbootstrap_v3.cfg
 
-      - name: Initialize pmbootstrap
+      - name: Initialize work directory
         run: |
-          echo "=== Initializing pmbootstrap ==="
-          # Use v23.12 channel with edge binaries (configured in channels.cfg)
-          printf "v23.12\n\n\n\n\n\n\n\n\ny\n\n" | pmbootstrap init || true
+          WORK_DIR="$HOME/.local/var/pmbootstrap"
           
-          echo "=== Checking status ==="
+          echo "=== Creating work directory structure ==="
+          mkdir -p "${WORK_DIR}/cache_git"
+          mkdir -p "${WORK_DIR}/config_apkbuild_pkgver"
+          mkdir -p "${WORK_DIR}/config_repos"
+          mkdir -p "${WORK_DIR}/dl"
+          mkdir -p "${WORK_DIR}/packages"
+          mkdir -p "${WORK_DIR}/tmp"
+          
+          echo "=== Cloning pmaports repository ==="
+          git clone --depth=1 --branch v23.12 https://codeberg.org/JoseskVolpe/pmaports.git \
+            "${WORK_DIR}/cache_git/pmaports"
+          
+          echo "=== Work directory initialized ==="
+          ls -la "${WORK_DIR}/"
+          echo "=== Pmaports cloned ==="
+          ls -la "${WORK_DIR}/cache_git/pmaports/" | head -20
+
+      - name: Update pmbootstrap
+        run: |
+          WORK_DIR="$HOME/.local/var/pmbootstrap"
+          PMAPORTS_DIR="$WORK_DIR/cache_git/pmaports"
+          
+          printf "\n\n" | pmbootstrap init || true
+        
+          pmbootstrap pull
           pmbootstrap status
 
-      - name: Update package indexes
-        run: |
-          echo "=== Updating package indexes ==="
-          pmbootstrap update --non-existing || {
-            echo "⚠️ WARNING: Some package indexes failed to download"
-            echo "This is expected for v23.12 branch - will build from source"
-          }
-
       - name: Build device packages
-        continue-on-error: true
         run: |
-          echo "=== Building device package ==="
-          pmbootstrap build device-${{ env.DEVICE }} || echo "Device build skipped"
+          echo "=== Building device packages for ${{ env.DEVICE }} ==="
           
-          echo "=== Building kernel ==="
-          pmbootstrap build linux-${{ env.DEVICE }} || echo "Kernel build skipped"
+          # Try to build device-specific packages
+          pmbootstrap build device-${{ env.DEVICE }} || echo "device package build skipped"
+          
+          # Try to build kernel
+          pmbootstrap build linux-${{ env.DEVICE }} || echo "kernel build skipped"
 
       - name: Install postmarketOS
         run: |
-          echo "=== Installing postmarketOS to image ==="
+          echo "=== Installing postmarketOS ==="
           
           INSTALL_METHOD="${{ github.event.inputs.install_method || 'android-recovery-zip' }}"
           
-          # Use default password: 147147
           case "$INSTALL_METHOD" in
             android-recovery-zip)
-              printf "147147\n147147\n" | pmbootstrap install \
-                --android-recovery-zip \
-                --recovery-install-partition=data
+              printf "147147\n147147\n" | pmbootstrap install --android-recovery-zip
               ;;
             netboot)
               printf "147147\n147147\n" | pmbootstrap install --no-fde --no-image
@@ -274,94 +274,161 @@ jobs:
             rootfs)
               printf "147147\n147147\n" | pmbootstrap install --no-fde
               ;;
+            odin)
+              printf "147147\n147147\n" | pmbootstrap install
+              ;;
             *)
-              printf "147147\n147147\n" | pmbootstrap install \
-                --android-recovery-zip \
-                --recovery-install-partition=data
+              printf "147147\n147147\n" | pmbootstrap install --android-recovery-zip
               ;;
           esac
 
-      - name: Export build artifacts
+      - name: Export artifacts
         run: |
-          echo "=== Exporting artifacts ==="
-          pmbootstrap export || true
+          echo "=== Exporting build artifacts ==="
+          pmbootstrap export --odin
           
-          # List what was created
-          find ~/.local/var/pmbootstrap -name "*.zip" -o -name "*.img" -o -name "*.tar.md5" 2>/dev/null || true
+          EXPORT_DIR="$HOME/.local/var/pmbootstrap/export"
+          if [ -d "$EXPORT_DIR" ]; then
+            echo "=== Exported files ==="
+            ls -lh "$EXPORT_DIR"
+          fi
 
-      - name: Collect artifacts
+      - name: Prepare artifacts for upload
         run: |
           WORK_DIR="$HOME/.local/var/pmbootstrap"
           ARTIFACT_DIR="${{ github.workspace }}/artifacts"
+          
           mkdir -p "$ARTIFACT_DIR"
           
-          echo "=== Collecting build artifacts ==="
+          echo "=== Copying all exported artifacts ==="
+
+          # Copy from /tmp/postmarketOS-export (main export location)
+          if [ -d "/tmp/postmarketOS-export" ]; then
+            echo "Copying from /tmp/postmarketOS-export"
+            cp -rv /tmp/postmarketOS-export/* "$ARTIFACT_DIR/" 2>/dev/null || true
+          fi
           
-          # From export directories
-          for export_dir in \
-            "/tmp/postmarketOS-export" \
-            "$WORK_DIR/export" \
-            "$WORK_DIR/chroot_native/tmp/postmarketOS-export"
-          do
-            if [ -d "$export_dir" ]; then
-              echo "Copying from: $export_dir"
-              cp -rv "$export_dir"/* "$ARTIFACT_DIR/" 2>/dev/null || true
-            fi
-          done
+          # Copy from pmbootstrap work export directory
+          if [ -d "$WORK_DIR/export" ]; then
+            echo "Copying from $WORK_DIR/export"
+            cp -rv "$WORK_DIR/export"/* "$ARTIFACT_DIR/" 2>/dev/null || true
+          fi
           
-          # Search for specific file types
-          echo "Searching for build artifacts..."
+          # Copy from chroot export if exists
+          if [ -d "$WORK_DIR/chroot_native/tmp/postmarketOS-export" ]; then
+            echo "Copying from chroot export"
+            cp -rv "$WORK_DIR/chroot_native/tmp/postmarketOS-export"/* "$ARTIFACT_DIR/" 2>/dev/null || true
+          fi
           
-          find "$WORK_DIR" -type f \( \
-            -name "*.zip" -o \
-            -name "*.tar.md5" -o \
-            -name "*.img" -o \
-            -name "*.img.xz" -o \
-            -name "pmos-*" \
-          \) -exec cp -v {} "$ARTIFACT_DIR/" \; 2>/dev/null || true
+          # Find and copy all the files mentioned in the export list
+          echo "Searching for additional files in $WORK_DIR"
           
-          # Copy SSH key
+          # Odin files
+          find "$WORK_DIR" -name "*.tar.md5" -type f -exec cp -v {} "$ARTIFACT_DIR/" \; 2>/dev/null || true
+          
+          # Recovery zips
+          find "$WORK_DIR" -name "pmos-*.zip" -type f -exec cp -v {} "$ARTIFACT_DIR/" \; 2>/dev/null || true
+          find "$WORK_DIR" -name "*.zip" -type f -exec cp -v {} "$ARTIFACT_DIR/" \; 2>/dev/null || true
+          
+          # All image files
+          find "$WORK_DIR" -name "*.img" -type f -exec cp -v {} "$ARTIFACT_DIR/" \; 2>/dev/null || true
+          find "$WORK_DIR" -name "*.img.xz" -type f -exec cp -v {} "$ARTIFACT_DIR/" \; 2>/dev/null || true
+          
+          # U-boot images
+          find "$WORK_DIR" -name "uInitrd" -type f -exec cp -v {} "$ARTIFACT_DIR/" \; 2>/dev/null || true
+          find "$WORK_DIR" -name "uImage" -type f -exec cp -v {} "$ARTIFACT_DIR/" \; 2>/dev/null || true
+          
+          # Kernel and initramfs
+          find "$WORK_DIR" -name "initramfs" -type f -exec cp -v {} "$ARTIFACT_DIR/" \; 2>/dev/null || true
+          find "$WORK_DIR" -name "vmlinuz" -type f -exec cp -v {} "$ARTIFACT_DIR/" \; 2>/dev/null || true
+          find "$WORK_DIR" -name "initramfs-*" -type f -exec cp -v {} "$ARTIFACT_DIR/" \; 2>/dev/null || true
+
+          # Copy SSH key info to artifact
           if [ -f ~/.ssh/id_rsa.pub ]; then
             cp ~/.ssh/id_rsa.pub "$ARTIFACT_DIR/SSH_PUBLIC_KEY.txt"
           fi
           
-          # Create build info
-          cat > "$ARTIFACT_DIR/BUILD_INFO.txt" << EOFINFO
-          PostmarketOS Build Information
-          ==============================
+          # Create detailed build info
+          cat > "$ARTIFACT_DIR/BUILD_INFO.md" << 'EOFMD'
+          # PostmarketOS Build Information
           
-          Device: ${{ env.DEVICE }}
-          UI: ${{ env.UI }}
-          User: ${{ env.USER }}
-          Kernel: ${{ env.KERNEL }}
-          WiFi: ${{ env.WIFI_BACKEND }}
-          Extra Packages: ${{ env.EXTRA_PACKAGES }}
+          ## Device Configuration
+          - **Device**: `${{ env.DEVICE }}`
+          - **UI**: `${{ env.UI }}`
+          - **User**: `${{ env.USER }}`
+          - **Kernel**: `${{ env.KERNEL }}`
+          - **Init System**: `${{ env.SYSTEMD }}`
+          - **WiFi Backend**: `${{ env.WIFI_BACKEND }}`
+          - **Extra Packages**: `${{ env.EXTRA_PACKAGES }}`
+          - **SSH Keys**: `${{ github.event.inputs.ssh_keys || 'false' }}`
           
-          Build Date: $(date -u)
-          Workflow Run: #${{ github.run_number }}
+          ## SSH Configuration
+          - SSH keys have been configured for the device
+          - Check `SSH_PUBLIC_KEY.txt` in artifacts to see the public key used
+          - You can SSH into the device after boot using your corresponding private key
           
-          Installation:
-          1. Boot into TWRP recovery
-          2. Wipe System, Data, Cache
-          3. Flash the .zip file
-          4. Reboot
+          ## Build Details
+          - **Workflow**: ${{ github.workflow }}
+          - **Run Number**: #${{ github.run_number }}
+          - **Run ID**: ${{ github.run_id }}
+          - **Commit**: ${{ github.sha }}
+          - **Branch**: ${{ github.ref_name }}
+          - **Triggered by**: @${{ github.actor }}
+          - **Build Time**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          - **Install Method**: ${{ github.event.inputs.install_method || 'android-recovery-zip' }}
           
-          Default password: 147147
-          EOFINFO
+          ## Installation Instructions
           
-          echo "=== Artifacts collected ==="
+          ### For Android Recovery ZIP
+          1. Download the `.zip` file
+          2. Copy to your device's internal storage or SD card
+          3. Boot into recovery mode (TWRP recommended)
+          4. Wipe System, Data, Cache (factory reset)
+          5. Flash the postmarketOS `.zip` file
+          6. Reboot system
+          
+          ### First Boot
+          - Default username: `${{ env.USER }}`
+          - Set password on first login
+          - Connect to WiFi
+          - Update system: `sudo apk update && sudo apk upgrade`
+          
+          ### SSH Access
+          If SSH keys were enabled:
+          ```bash
+          # Find device IP (on device terminal)
+          ip addr show
+          
+          # From your PC
+          ssh ${{ env.USER }}@<device-ip>
+          ```
+          
+          ## Resources
+          - [PostmarketOS Wiki](https://wiki.postmarketos.org/)
+          - [Installation Guide](https://wiki.postmarketos.org/wiki/Installation_guide)
+          - [Device Info: ${{ env.DEVICE }}](https://wiki.postmarketos.org/wiki/Device:${{ env.DEVICE }})
+          - [Troubleshooting](https://wiki.postmarketos.org/wiki/Troubleshooting)
+          
+          ## Checksum
+          ```
+          $(cd "$ARTIFACT_DIR" && sha256sum * 2>/dev/null | grep -v BUILD_INFO || echo "No files to checksum")
+          ```
+          EOFMD
+          
+          echo "=== Artifacts prepared ==="
           ls -lah "$ARTIFACT_DIR"
 
-      - name: Upload artifacts
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: pmos-${{ env.DEVICE }}-${{ env.UI }}-${{ github.run_number }}
+          name: postmarketos-${{ env.DEVICE }}-${{ env.UI }}-build${{ github.run_number }}
           path: ${{ github.workspace }}/artifacts/
           retention-days: 30
           if-no-files-found: warn
+          compression-level: 9
 
-      - name: Upload logs on failure
+      - name: Upload build logs
         uses: actions/upload-artifact@v4
         if: failure()
         with:
@@ -373,37 +440,53 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      - name: Build summary
+      - name: Generate workflow summary
         if: always()
         run: |
           cat >> $GITHUB_STEP_SUMMARY << 'EOFSUMMARY'
-          # 📱 PostmarketOS Build
+          # 📱 PostmarketOS Build Summary
           
-          ## Configuration
-          - **Device**: `${{ env.DEVICE }}`
-          - **UI**: `${{ env.UI }}`
-          - **User**: `${{ env.USER }}`
-          - **Kernel**: `${{ env.KERNEL }}`
-          - **WiFi**: `${{ env.WIFI_BACKEND }}`
-          - **Packages**: `${{ env.EXTRA_PACKAGES }}`
+          ## ⚙️ Configuration
+          | Parameter | Value |
+          |-----------|-------|
+          | **Device** | `${{ env.DEVICE }}` |
+          | **UI** | `${{ env.UI }}` |
+          | **User** | `${{ env.USER }}` |
+          | **Kernel** | `${{ env.KERNEL }}` |
+          | **Init System** | `${{ env.SYSTEMD }}` |
+          | **WiFi Backend** | `${{ env.WIFI_BACKEND }}` |
+          | **Extra Packages** | `${{ env.EXTRA_PACKAGES }}` |
+          | **Install Method** | `${{ github.event.inputs.install_method || 'android-recovery-zip' }}` |
+          | **SSH Keys** | `${{ github.event.inputs.ssh_keys }}` |
           
-          ## Status
-          - Build #${{ github.run_number }}
-          - Triggered by: @${{ github.actor }}
+          ## 📊 Build Information
+          - **Status**: ${{ job.status }}
+          - **Run**: [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          - **Triggered by**: @${{ github.actor }}
+          - **Commit**: `${{ github.sha }}`
+          - **Branch**: `${{ github.ref_name }}`
           
-          ## Installation
-          1. Download `.zip` from Artifacts
-          2. Boot to TWRP recovery
-          3. Wipe → Factory Reset
-          4. Install → Select `.zip`
-          5. Reboot
+          ## 🔑 SSH Configuration
+          - SSH keys were configured for the device
+          - Download `SSH_PUBLIC_KEY.txt` from artifacts to verify
+          - Use your corresponding private key to connect after installation
           
-          **Default password**: `147147`
+          ## 📦 Artifacts
+          Check the "Artifacts" section at the top of this page to download your build.
           
-          ## Resources
-          - [Device Wiki](https://wiki.postmarketos.org/wiki/Device:${{ env.DEVICE }})
-          - [Installation Guide](https://wiki.postmarketos.org/wiki/Installation_guide)
+          ## 🚀 Quick Install Guide
+          1. Download the `.zip` file from artifacts
+          2. Copy to your device's SD card
+          3. Boot into TWRP recovery
+          4. Wipe → Factory Reset
+          5. Install → Select the `.zip` file
+          6. Reboot System
+          
+          ## 📚 Useful Links
+          - [Device Wiki Page](https://wiki.postmarketos.org/wiki/Device:${{ env.DEVICE }})
+          - [PostmarketOS Installation Guide](https://wiki.postmarketos.org/wiki/Installation_guide)
+          - [Troubleshooting Guide](https://wiki.postmarketos.org/wiki/Troubleshooting)
           
           ---
-          Built: $(date -u)
+          *Build completed at $(date)*
           EOFSUMMARY
