@@ -159,16 +159,16 @@ jobs:
           
           echo "=== Setting up git remotes for pmbootstrap compatibility ==="
           git remote rename origin custom
-          git remote add origin https://codeberg.org/JoseskVolpe/pmaports.git
-          git fetch origin v23.12:refs/remotes/origin/v23.12 --depth=1
-
+          git remote add origin https://gitlab.postmarketos.org/postmarketOS/pmaports.git
+          git fetch origin master:refs/remotes/origin/master --depth=1
+          git checkout ${{ env.CUSTOM_PMAPORTS_BRANCH }}
           
           echo "=== Configuring to use edge binary packages ==="
           # Modify channels.cfg to point v23.12 to use edge binaries
           if [ -f "channels.cfg" ]; then
             # Update v23.12 channel to use edge mirror for binaries
             sed -i 's|mirrordir_alpine = .*|mirrordir_alpine = edge|' channels.cfg
-            sed -i 's|branch_aports = .*|branch_aports = testing|' channels.cfg
+            sed -i 's|branch_aports = .*|branch_aports = edge|' channels.cfg
             echo "Modified channels.cfg:"
             cat channels.cfg | grep -A5 "\[v23.12\]" || true
           fi
@@ -228,6 +228,23 @@ jobs:
           
           echo "=== Config created ==="
           cat ~/.config/pmbootstrap_v3.cfg
+
+      - name: Initialize pmbootstrap
+        run: |
+          echo "=== Initializing pmbootstrap ==="
+          # Use v23.12 channel with edge binaries (configured in channels.cfg)
+          printf "v23.12\n\n\n\n\n\n\n\n\ny\n\n" | pmbootstrap init || true
+          
+          echo "=== Checking status ==="
+          pmbootstrap status
+
+      - name: Update package indexes
+        run: |
+          echo "=== Updating package indexes ==="
+          pmbootstrap update --non-existing || {
+            echo "⚠️ WARNING: Some package indexes failed to download"
+            echo "This is expected for v23.12 branch - will build from source"
+          }
 
       - name: Build device packages
         continue-on-error: true
