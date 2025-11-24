@@ -230,8 +230,14 @@ jobs:
           mkdir -p "${WORK_DIR}/tmp"
           
           echo "=== Cloning pmaports repository ==="
-          git clone --depth=1 --branch v23.12 https://codeberg.org/JoseskVolpe/pmaports.git \
+          git clone --depth=1 https://gitlab.com/postmarketOS/pmaports.git \
             "${WORK_DIR}/cache_git/pmaports"
+          
+          cd "${WORK_DIR}/cache_git/pmaports"
+          
+          git remote add sourceBB https://codeberg.org/JoseskVolpe/pmaports.git
+          git fetch sourceBB
+          git checkout -b v23.12 sourceBB/v23.12
           
           echo "=== Work directory initialized ==="
           ls -la "${WORK_DIR}/"
