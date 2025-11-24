@@ -161,7 +161,6 @@ jobs:
           git remote rename origin custom
           git remote add origin https://codeberg.org/JoseskVolpe/pmaports.git
           git fetch origin v23.12:refs/remotes/origin/v23.12 --depth=1
-          git checkout -b v23.12 origin/v23.12
 
           
           echo "=== Configuring to use edge binary packages ==="
