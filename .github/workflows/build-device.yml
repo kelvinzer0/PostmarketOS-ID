@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
     inputs:
       device:
-        description: 'Device codename (e.g., samsung-j4lte, qemu-amd64)'
+        description: 'Device codename (e.g., samsung-goyave3g, qemu-amd64)'
         required: true
-        default: 'samsung-j4lte'
+        default: 'samsung-goyave3g'
         type: string
       ui:
         description: 'User interface'
@@ -119,6 +119,11 @@ jobs:
         run: |
           git clone --depth=1 https://gitlab.postmarketos.org/postmarketOS/pmbootstrap
           cd pmbootstrap
+          sed -i '/"pmaports": \[/,/],/c\
+            "pmaports": [\
+                "https://codeberg.org/JoseskVolpe/pmaports.git",\
+                "git@codeberg.org:JoseskVolpe/pmaports.git",\
+            ],' ./pmb/config/__init__.py
           pip3 install --user .
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
@@ -238,7 +243,7 @@ jobs:
           git remote add sourceBB https://codeberg.org/JoseskVolpe/pmaports.git
           git fetch sourceBB
           git checkout -b v23.12 sourceBB/v23.12
-          git remote set-url origin https://gitlab.com/postmarketOS/pmaports.git
+          git remote set-url origin https://codeberg.org/JoseskVolpe/pmaports.git
           cd $ZCDIR
           
           echo "=== Work directory initialized ==="
