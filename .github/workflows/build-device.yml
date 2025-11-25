@@ -235,7 +235,7 @@ jobs:
           mkdir -p "${WORK_DIR}/tmp"
           
           echo "=== Cloning pmaports repository ==="
-          git clone --depth=1 https://gitlab.com/zcdns/pmaports.git \
+          git clone --depth=1 https://codeberg.org/zcdns/pmaports.git \
             "${WORK_DIR}/cache_git/pmaports"
           
           echo "=== Work directory initialized ==="
