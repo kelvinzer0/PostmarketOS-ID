@@ -232,12 +232,14 @@ jobs:
           echo "=== Cloning pmaports repository ==="
           git clone --depth=1 https://gitlab.com/postmarketOS/pmaports.git \
             "${WORK_DIR}/cache_git/pmaports"
-          
+          export ZCDIR=$(pwd)
           cd "${WORK_DIR}/cache_git/pmaports"
           
           git remote add sourceBB https://codeberg.org/JoseskVolpe/pmaports.git
           git fetch sourceBB
           git checkout -b v23.12 sourceBB/v23.12
+          git remote set-url origin https://gitlab.com/postmarketOS/pmaports.git
+          cd $ZCDIR
           
           echo "=== Work directory initialized ==="
           ls -la "${WORK_DIR}/"
