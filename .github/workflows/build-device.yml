@@ -121,8 +121,8 @@ jobs:
           cd pmbootstrap
           sed -i '/"pmaports": \[/,/],/c\
             "pmaports": [\
-                "https://codeberg.org/JoseskVolpe/pmaports.git",\
-                "git@codeberg.org:JoseskVolpe/pmaports.git",\
+                "https://codeberg.org/zcdns/pmaports.git",\
+                "git@codeberg.org:zcdns/pmaports.git",\
             ],' ./pmb/config/__init__.py
           pip3 install --user .
           echo "$HOME/.local/bin" >> $GITHUB_PATH
@@ -235,16 +235,8 @@ jobs:
           mkdir -p "${WORK_DIR}/tmp"
           
           echo "=== Cloning pmaports repository ==="
-          git clone --depth=1 https://gitlab.com/postmarketOS/pmaports.git \
+          git clone --depth=1 https://gitlab.com/zcdns/pmaports.git \
             "${WORK_DIR}/cache_git/pmaports"
-          export ZCDIR=$(pwd)
-          cd "${WORK_DIR}/cache_git/pmaports"
-          
-          git remote add sourceBB https://codeberg.org/JoseskVolpe/pmaports.git
-          git fetch sourceBB
-          git checkout -b v23.12 sourceBB/v23.12
-          git remote set-url origin https://codeberg.org/JoseskVolpe/pmaports.git
-          cd $ZCDIR
           
           echo "=== Work directory initialized ==="
           ls -la "${WORK_DIR}/"
