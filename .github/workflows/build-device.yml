@@ -38,7 +38,7 @@ on:
       extra_packages:
         description: 'Extra packages (comma separated)'
         required: false
-        default: 'nano,vim,wget,htop'
+        default: 'nano,vim,wget,htop,soc-sprd-audio-sc8830'
         type: string
       kernel:
         description: 'Kernel variant'
