@@ -248,10 +248,13 @@ jobs:
           WORK_DIR="$HOME/.local/var/pmbootstrap"
           PMAPORTS_DIR="$WORK_DIR/cache_git/pmaports"
           
+          echo "Cleaning old workdir..."
+          rm -rf "$WORK_DIR"
+          mkdir -p "$WORK_DIR/cache_git"
           printf "\n\n" | pmbootstrap init || true
         
-          pmbootstrap update --non-existing || true
-          pmbootstrap status || true
+          pmbootstrap update --non-existing
+          pmbootstrap status
 
       - name: Build device packages
         run: |
